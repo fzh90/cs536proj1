@@ -1,0 +1,9 @@
+// This is a simple CSXlite program
+{    int a;
+   bool b;
+{ int c;
+    if (b)
+     c = a+1;}
+ a=a+1; 
+
+}

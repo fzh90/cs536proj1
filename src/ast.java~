@@ -1,0 +1,458 @@
+/*  This defines AST classes forCSX Lite
+ * 
+ * You will need to change definitions of method countDeclsandUses into
+ *  definitions of method buildCrossReferences. This is the key method that processes
+ *  AST nodes and extracts identifier definitions and uses.
+ */
+// abstract superclass; only subclasses are actually created
+abstract class ASTNode {       
+
+	public final int 	linenum;
+	public final int	colnum;	
+
+	ASTNode(){linenum=-1;colnum=-1;}
+	ASTNode(int l,int c){linenum=l;colnum=c;}
+	boolean   isNull(){return false;}; // Is this node null?
+
+	abstract void accept(Visitor v, int indent);// Will be defined in sub-classes    
+
+	// default action on an AST node is to record no declarations and no identifier uses
+	void countDeclsAndUses(ScopeInfo currentScope){ 
+		return;
+	}
+	// TODO: ?
+	void buildCrossReferences(ScopeInfo currentScope){
+		return;
+	}
+};
+
+// This node is used to root only CSXlite programs 
+class csxLiteNode extends ASTNode {
+
+	public final fieldDeclsOption	progDecls;
+	public final stmtsOption 		progStmts;
+	private ScopeInfo  		 		scopeList;	
+
+	csxLiteNode(fieldDeclsOption decls, stmtsOption stmts, int line, int col){      
+		super(line,col);
+		progDecls=decls;
+		progStmts=stmts;
+		scopeList=null;		
+	}; 
+
+	void accept(Visitor u, int indent){ u.visit(this,indent); }
+	
+	ScopeInfo countDeclsAndUses(){
+		scopeList = new ScopeInfo(1,linenum);
+		progDecls.countDeclsAndUses(scopeList);
+		progStmts.countDeclsAndUses(scopeList);
+		return scopeList;
+	}
+	
+	ScopeInfo buildCrossReferences(){ //!
+		scopeList = new ScopeInfo(1,linenum);		
+		progDecls.buildCrossReferences(scopeList);		
+		progStmts.buildCrossReferences(scopeList); 		 
+		return scopeList;
+	}
+};
+
+abstract class fieldDeclsOption extends ASTNode{
+	fieldDeclsOption(int line,int column){
+		super(line,column);
+	}
+	fieldDeclsOption(){ super(); }
+};
+
+class fieldDeclsNode extends fieldDeclsOption {
+
+	public final declNode			thisField;
+	public final fieldDeclsOption 	moreFields;
+
+	fieldDeclsNode(declNode d, fieldDeclsOption f, int line, int col){
+		super(line,col);
+		thisField=d;
+		moreFields=f;
+	}
+
+	static nullFieldDeclsNode NULL = new nullFieldDeclsNode();
+
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+	
+	void countDeclsAndUses(ScopeInfo currentScope){
+		thisField.countDeclsAndUses(currentScope);
+		moreFields.countDeclsAndUses(currentScope);
+		return;
+	}
+
+	void buildCrossReferences(ScopeInfo currentScope){
+		thisField.buildCrossReferences(currentScope);
+		moreFields.buildCrossReferences(currentScope);
+		return;
+	}
+};
+
+class nullFieldDeclsNode extends fieldDeclsOption {
+
+	nullFieldDeclsNode(){};
+
+	boolean   isNull(){return true;};
+
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+
+	void countDeclsAndUses(ScopeInfo currentScope){
+		return;
+	}
+
+	void buildCrossReferences(ScopeInfo currentScope){
+		return;
+	}
+};
+
+// abstract superclass; only subclasses are actually created
+abstract class declNode extends ASTNode {
+	declNode(){super();};
+	declNode(int l,int c){super(l,c);};
+};
+
+class varDeclNode extends declNode { 
+
+	public final	identNode	varName;
+	public final	typeNode 	varType;
+	public final	exprOption 	initValue;
+
+	varDeclNode(identNode id, typeNode t, exprOption e,
+			int line, int col){
+		super(line,col);
+		varName=id;
+		varType=t;
+		initValue=e;
+	}
+
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+
+	
+	void countDeclsAndUses(ScopeInfo currentScope){
+		currentScope.declsCount+=1;		
+	}
+	
+	// Create a new symbol table for each declaration
+	void buildCrossReferences(ScopeInfo currentScope){ //!
+		currentScope.declsCount+=1;			
+		symbol_table newID = new symbol_table(varName.linenum,varName.idname,varType.typeName);
+		
+		if (currentScope.hashTable.containsKey(varName.idname)) { // check name for illegal redeclaration				
+			
+			String errorMsg = "[CSXLite] \"" + varName.idname + "\" previously declared at line " 
+			                + currentScope.hashTable.get(varName.idname).line_num 
+			                + " and illegally redeclared at line " + varName.linenum;
+			System.err.println(errorMsg);
+			//currentScope.hashTable.remove(varName.idname);
+		}
+		else {
+			currentScope.hashTable.put(varName.idname, newID);
+		}		
+	}
+};
+
+abstract class typeNode extends ASTNode {
+	// abstract superclass; only subclasses are actually created
+	typeNode(){super();};
+	typeNode(int l,int c){super(l,c);};
+	static nullTypeNode NULL = new nullTypeNode();
+	protected String typeName;
+};
+
+class nullTypeNode extends typeNode {
+
+	nullTypeNode(){};
+
+	boolean   isNull(){return true;};
+
+	void accept(Visitor u, int indent){ u.visit(this,indent); }
+};
+
+
+class intTypeNode extends typeNode {
+	intTypeNode(int line, int col){
+		super(line,col);
+		typeName = "int"; //!
+	}
+
+	void accept(Visitor u, int indent){ u.visit(this,indent); }	
+};
+
+
+class boolTypeNode extends typeNode {
+	boolTypeNode(int line, int col){
+		super(line,col);
+		typeName = "bool"; //!
+	}
+
+	void accept(Visitor u, int indent){ u.visit(this,indent); }
+};
+
+//abstract superclass; only subclasses are actually created
+abstract class stmtOption extends ASTNode {
+	stmtOption(){super();};
+	stmtOption(int l,int c){super(l,c);};
+	//static nullStmtNode NULL = new nullStmtNode();
+};
+
+// abstract superclass; only subclasses are actually created
+abstract class stmtNode extends stmtOption {
+	stmtNode(){super();};
+	stmtNode(int l,int c){super(l,c);};
+	static nullStmtNode NULL = new nullStmtNode();
+};
+
+class nullStmtNode extends stmtOption {
+	nullStmtNode(){};
+	boolean   isNull(){return true;};
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+	void countDeclsAndUses(ScopeInfo currentScope){return;}
+	void buildCrossReferences(ScopeInfo currentScope){return;}
+};
+
+abstract class stmtsOption extends ASTNode{
+	stmtsOption(int line,int column){
+		super(line,column);
+	}
+	stmtsOption(){ super(); }
+};
+
+class stmtsNode extends stmtsOption { 
+	public final stmtNode	    thisStmt;
+	public final stmtsOption 	moreStmts;
+
+	stmtsNode(stmtNode stmt, stmtsOption stmts, int line, int col){
+		super(line,col);
+		thisStmt=stmt;
+		moreStmts=stmts;
+	};
+
+	static nullStmtsNode NULL = new nullStmtsNode();
+
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+
+	void countDeclsAndUses(ScopeInfo currentScope){
+		// Count decls and uses in both subtrees:
+		thisStmt.countDeclsAndUses(currentScope);
+		moreStmts.countDeclsAndUses(currentScope);
+	}
+
+	void buildCrossReferences(ScopeInfo currentScope){
+		// Count decls and uses in both subtrees:
+		thisStmt.buildCrossReferences(currentScope);
+		moreStmts.buildCrossReferences(currentScope);
+	}
+};
+
+
+class nullStmtsNode extends stmtsOption {
+	nullStmtsNode(){};
+	boolean   isNull(){return true;};
+
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+
+	void countDeclsAndUses(ScopeInfo currentScope){return;}
+	void buildCrossReferences(ScopeInfo currentScope){return;}
+};
+
+class asgNode extends stmtNode {    
+
+	public final identNode	target;
+	public final exprNode 	source;
+
+	asgNode(identNode n, exprNode e, int line, int col){       
+		super(line,col);
+		target=n;
+		source=e;
+	};
+
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+
+	void countDeclsAndUses(ScopeInfo currentScope){
+		// The target of the assign counts as 1 use
+		currentScope.usesCount +=1; 
+		// Visit the source expression to include the identifiers in it
+		source.countDeclsAndUses(currentScope);			
+	}
+
+	void buildCrossReferences(ScopeInfo currentScope){ //!
+		// The target of the assign counts as 1 use
+		currentScope.usesCount +=1; 	
+		// NOTE: If we are in an inner scope, we need to check whether the declaration is local or global
+		// if it is global, the currentScope will return null pointer exception as the declaration is
+		// out of scope
+		if (currentScope.hashTable.containsKey(target.idname))
+		{			
+			currentScope.hashTable.get(target.idname).uses.add(target.linenum);			
+		}
+		else // search the correct scope and update the uses
+		{				
+			if (!ScopeInfo.search(target.idname, currentScope, target.linenum))
+			{
+				System.err.println("[CSXLite] \"" + target.idname + "\"" + "undeclared use at line " + target.linenum);				
+			}			
+		}
+		// Visit the source expression to include the identifiers in it
+		source.buildCrossReferences(currentScope);		
+	}
+};
+
+class ifThenNode extends stmtNode {
+
+	public final exprNode 		condition;
+	public final stmtNode 		thenPart;
+	public final stmtOption 	elsePart;
+
+	ifThenNode(exprNode e, stmtNode s1, stmtOption s2, int line, int col){
+		super(line,col);
+		condition=e;
+		thenPart=s1;
+		elsePart=s2;
+	};
+
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+
+	void countDeclsAndUses(ScopeInfo currentScope){
+		// Count identifier uses in control expression and then statement.
+		// In CsxLite the else statement is always null
+		condition.countDeclsAndUses(currentScope);
+		thenPart.countDeclsAndUses(currentScope);
+	}
+
+	void buildCrossReferences(ScopeInfo currentScope){
+		// Count identifier uses in control expression and then statement.
+		// In CsxLite the else statement is always null
+		condition.buildCrossReferences(currentScope);
+		thenPart.buildCrossReferences(currentScope);
+	}
+};
+
+class blockNode extends stmtNode {
+
+	public final fieldDeclsOption 	decls;  
+	public final stmtsOption 		stmts;	
+
+	blockNode(fieldDeclsOption f, stmtsOption s, int line, int col){
+		super(line,col);
+		decls=f;
+		stmts=s;		
+	}
+
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+
+	void countDeclsAndUses(ScopeInfo currentScope){
+		/* A block opens a new scope, so a new ScopeInfo node is created.
+		   It is appended to the end of the ScopeInfo list.
+		   The new scope is used to record declarations and uses in the block
+		 */ 
+		ScopeInfo  localScope = new ScopeInfo(linenum);
+		ScopeInfo.append(currentScope,localScope); 
+		decls.countDeclsAndUses(localScope);
+		stmts.countDeclsAndUses(localScope);
+	}
+
+	void buildCrossReferences(ScopeInfo currentScope){
+		
+		ScopeInfo  localScope = new ScopeInfo(linenum);
+		ScopeInfo.append(currentScope,localScope); // now localScope is at the end and the number is updated
+		
+		decls.buildCrossReferences(localScope);
+		stmts.buildCrossReferences(localScope);
+	}
+};
+
+//abstract superclass; only subclasses are actually created
+abstract class exprOption extends ASTNode {
+	exprOption(){super();};
+	exprOption(int l,int c){super(l,c);};
+	//static nullStmtNode NULL = new nullStmtNode();
+};
+
+// abstract superclass; only subclasses are actually created
+abstract class exprNode extends exprOption {
+	exprNode(){super();};
+	exprNode(int l,int c){super(l,c);};
+	static nullExprNode NULL = new nullExprNode();
+};
+
+class nullExprNode extends exprOption {
+	nullExprNode(){super();};
+	boolean   isNull(){return true;};
+	void accept(Visitor u, int indent){}
+};
+
+class binaryOpNode extends exprNode {
+
+	public final exprNode 	leftOperand;
+	public final exprNode 	rightOperand;
+	public final int		operatorCode; // Token code of the operator
+
+	binaryOpNode(exprNode e1, int op, exprNode e2, int line, int col){
+		super(line,col);
+		operatorCode=op;
+		leftOperand=e1;
+		rightOperand=e2;
+	};
+
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+
+	// Count identifier uses in left and right operands
+	void countDeclsAndUses(ScopeInfo currentScope){
+		leftOperand.countDeclsAndUses(currentScope);
+		rightOperand.countDeclsAndUses(currentScope);		
+	}
+
+	void buildCrossReferences(ScopeInfo currentScope){
+		leftOperand.buildCrossReferences(currentScope);
+		rightOperand.buildCrossReferences(currentScope);		
+	}
+};
+
+class identNode extends exprNode {
+
+	public final String 	idname;
+
+	identNode(String identname, int line, int col){
+		super(line,col);
+		idname   = identname;
+	};
+
+	void accept(Visitor u, int indent){ u.visit(this,indent);}
+
+	//One identifier used here:
+	void countDeclsAndUses(ScopeInfo currentScope){
+		currentScope.usesCount+=1;		
+	}
+
+	void buildCrossReferences(ScopeInfo currentScope){ //!
+		currentScope.usesCount+=1; 	
+		
+		if (currentScope.hashTable.containsKey(idname)) 
+		{
+			currentScope.hashTable.get(idname).uses.add(linenum);			
+		}
+		else // search scopes and update the uses
+		{
+			if (!ScopeInfo.search(idname, currentScope, linenum))
+			{
+				System.err.println("[CSXLite] \"" + idname + "\"" + " undeclared use at line " + linenum);				
+			}
+		}		
+	}
+};
+
+class intLitNode extends exprNode {
+	public final int 	intval;
+	intLitNode(int val, int line, int col){
+		super(line,col);
+		intval=val;
+	}
+
+	void accept(Visitor u, int indent){ u.visit(this,indent); 
+	//System.out.println(" intLitNode: " + intval);
+	}
+};

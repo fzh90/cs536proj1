@@ -1,0 +1,25 @@
+CS536 Fall2012 
+Programming Assignment 1: Identifier Cross-Reference Analysis
+by Faiz Lurman (9063032438)
+
+build.console.xml - for terminal use
+build.xml         - for eclipse  use
+
+ScopeInfo.java
+-changed to be doubly linked to support scope traversal in order to search
+ for previously declared variables
+
+ast.java
+-added buildCrossReferences method to suitable nodes to support the task
+ of adding the variable uses and dealing with the correct scoping
+
+symbol_table.java
+-structure used to store infos on a variable
+
+Extra credit:
+Illegal redeclaration:
+- If found redeclared, only displays error and do not delete the first declaration from hash table. Why?
+
+After submitted changes...
+- case insensitive at identNode
+- correct original scope info
